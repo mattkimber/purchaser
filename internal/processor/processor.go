@@ -25,6 +25,7 @@ type Unit struct {
 	DoubleHeaded bool
 	ReuseSpritesFrom string
 	Template string
+	ArticulatedLengths string
 }
 
 func Process(filename string) error{
@@ -82,6 +83,19 @@ func processUnit(unit Unit) {
 	outputImg := image.NewPaletted(image.Rectangle{Max: image.Point{X: MAX_SIZE, Y: 17}}, spriteImg.ColorModel().(color.Palette))
 
 	curX := 2
+
+	if unit.Cars <= 1 {
+		len := 0
+		splitArticLen := strings.Split(unit.ArticulatedLengths, ",")
+		for _, articLen := range splitArticLen {
+			if l, err := strconv.Atoi(articLen); err == nil {
+				len += l * 4
+			}
+		}
+
+		curX = (MAX_SIZE / 2) - (len / 2)
+	}
+
 	for x := START_X; x < END_X; x++ {
 		startDrawing := false
 
@@ -198,6 +212,7 @@ func getUnit(dataLine []string, fields []string) Unit {
 		DoubleHeaded:           false,
 		ReuseSpritesFrom:       templateData["reuse_sprites"],
 		Template:			    templateData["template"],
+		ArticulatedLengths:     templateData["articulated_lengths"],
 	}
 
 	unit.Cars, _ = strconv.Atoi(templateData["cars"])
@@ -223,7 +238,7 @@ func getFields(data [][]string) (fields []string, err error) {
 		fields[i] = strings.Trim(f, " \xEF\xBB\xBF")
 		if fields[i] == "cars" || fields[i] == "tender" || fields[i] == "requires_second_power_car" ||
 			fields[i] == "double_headed" || fields[i] == "reuse_sprites" || fields[i] == "layout" ||
-			fields[i] == "id"  || fields[i] == "template" {
+			fields[i] == "id"  || fields[i] == "template" || fields[i] == "articulated_lengths" {
 			requiredFields++
 		}
 
@@ -231,7 +246,7 @@ func getFields(data [][]string) (fields []string, err error) {
 
 	if requiredFields < 8 {
 		log.Printf("CSV headers: %v", fields)
-		err = fmt.Errorf("did not find template, id, cars, tender, reuse_sprites, requires_second_power_car, double_headed and layout columns in csv file")
+		err = fmt.Errorf("did not find template, id, cars, tender, reuse_sprites, requires_second_power_car, double_headed, articulated_lengths and layout columns in csv file")
 		return
 	}
 
