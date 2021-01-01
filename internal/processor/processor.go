@@ -14,17 +14,22 @@ import (
 )
 
 const MAX_SIZE = 64
-const START_X = 756
-const END_X = 818
+const START_X_LARGE = 757
+const END_X_LARGE = 819
+
+const START_X_SMALL = 180
+const END_X_SMALL = 216
+
 
 type Unit struct {
 	ID string
 	Cars int
-	NextSprite string
+	Sprites []string
 	RequiresSecondPowerCar bool
 	DoubleHeaded bool
 	ReuseSpritesFrom string
 	Template string
+	Length int
 }
 
 func Process(filename string) error{
@@ -68,48 +73,34 @@ func processUnit(unit Unit) {
 		overlay = "purchase_sprites/double_headed.png"
 	}
 
-	sprite := unit.ID
+	sprites := unit.Sprites
 	if unit.ReuseSpritesFrom != "" {
-		sprite = unit.ReuseSpritesFrom
+		sprites[0] = unit.ReuseSpritesFrom
 	}
 
-	spriteImg, err := getPNG(fmt.Sprintf("1x/%s_8bpp.png", sprite))
-	if err != nil {
-		log.Printf("Error processing %s: %v", unit.ID, err)
-		return
-	}
-
-	outputImg := image.NewPaletted(image.Rectangle{Max: image.Point{X: MAX_SIZE, Y: 17}}, spriteImg.ColorModel().(color.Palette))
-
+	var outputImg *image.Paletted
 	curX := 2
-	for x := START_X; x < END_X; x++ {
-		startDrawing := false
+	ySize := 17
 
-		for y := 0; y < spriteImg.Bounds().Max.Y; y++ {
-			c := spriteImg.ColorIndexAt(x, y)
-			outputImg.SetColorIndex(curX, y, c)
-			if c != 0 && c != 255 {
-				startDrawing = true
-			}
-		}
-
-		if startDrawing {
-			curX++
-			if curX >= MAX_SIZE {
-				break
-			}
-		}
-	}
-
-	if unit.NextSprite != "" {
-		spriteImg, err = getPNG(fmt.Sprintf("1x/%s_8bpp.png", unit.NextSprite))
+	for idx, sprite := range sprites {
+		spriteImg, err := getPNG(fmt.Sprintf("1x/%s_8bpp.png", sprite))
 		if err != nil {
 			log.Printf("Error processing %s: %v", unit.ID, err)
 			return
 		}
 
-		for x := START_X; x < END_X; x++ {
+		startX, endX := START_X_LARGE, END_X_LARGE
+		if spriteImg.Bounds().Max.X < startX {
+			startX, endX, ySize = START_X_SMALL, END_X_SMALL, 14
+		}
+
+		if outputImg == nil {
+			outputImg = image.NewPaletted(image.Rectangle{Max: image.Point{X: MAX_SIZE, Y: ySize}}, spriteImg.ColorModel().(color.Palette))
+		}
+
+		for x := startX; x < endX; x++ {
 			startDrawing := false
+
 			for y := 0; y < spriteImg.Bounds().Max.Y; y++ {
 				c := spriteImg.ColorIndexAt(x, y)
 				outputImg.SetColorIndex(curX, y, c)
@@ -125,16 +116,25 @@ func processUnit(unit Unit) {
 				}
 			}
 		}
+
+		if idx == 0 && curX > (2 + 1 + unit.Length) {
+			curX = 2 + 1 + unit.Length
+		}
+
+		if curX >= MAX_SIZE {
+			break
+		}
 	}
 
+
 	if overlay != "" {
-		spriteImg, err = getPNG(overlay)
+		spriteImg, err := getPNG(overlay)
 		if err != nil {
 			log.Printf("Error processing %s: %v", unit.ID, err)
 			return
 		}
 
-		curY := 17 - 1 - spriteImg.Bounds().Max.Y
+		curY := ySize - 1 - spriteImg.Bounds().Max.Y
 		curX = curX - 1 - spriteImg.Bounds().Max.X
 
 		for x := 0; x < spriteImg.Bounds().Max.X; x++ {
@@ -147,7 +147,7 @@ func processUnit(unit Unit) {
 		}
 	}
 
-	err = writePNG(unit.ID, outputImg)
+	err := writePNG(unit.ID, outputImg)
 	if err != nil {
 		log.Printf("could not write image for unit %s: %v", unit.ID, err)
 	}
@@ -181,19 +181,18 @@ func getUnit(dataLine []string, fields []string) Unit {
 		templateData[fields[i]] = f
 	}
 
-	nextSprite := ""
-	if templateData["tender"] != "" {
-		nextSprite = templateData["tender"]
+	var sprites []string
+	if hasTender, ok := templateData["tender"]; ok && hasTender != "" {
+		sprites = []string{ templateData["id"], templateData["tender"] }
 	} else if templateData["layout"] != "" {
-		layoutSplit := strings.Split(templateData["layout"], ",")
-		if len(layoutSplit) > 1 {
-			nextSprite = layoutSplit[1]
-		}
+		sprites = strings.Split(templateData["layout"], ",")
+	} else {
+		sprites = []string { templateData["id"]}
 	}
 
 	unit := Unit{
 		ID:                     templateData["id"],
-		NextSprite:             nextSprite,
+		Sprites:                sprites,
 		RequiresSecondPowerCar: false,
 		DoubleHeaded:           false,
 		ReuseSpritesFrom:       templateData["reuse_sprites"],
@@ -201,11 +200,16 @@ func getUnit(dataLine []string, fields []string) Unit {
 	}
 
 	unit.Cars, _ = strconv.Atoi(templateData["cars"])
-	if templateData["requires_second_power_car"] != "" {
+	unit.Length, _ = strconv.Atoi(templateData["ttd_len"])
+
+	// convert to pixels
+	unit.Length = unit.Length * 4
+
+	if powerCar, ok := templateData["requires_second_power_car"]; ok && powerCar != "" {
 		unit.RequiresSecondPowerCar = true
 	}
 
-	if templateData["double_headed"] != "" {
+	if dblHead, ok := templateData["double_headed"]; ok && dblHead != "" {
 		unit.DoubleHeaded = true
 	}
 
@@ -221,17 +225,17 @@ func getFields(data [][]string) (fields []string, err error) {
 	for i, f := range data[0] {
 		// CSVs found in the wild may have BOM in the header line
 		fields[i] = strings.Trim(f, " \xEF\xBB\xBF")
-		if fields[i] == "cars" || fields[i] == "tender" || fields[i] == "requires_second_power_car" ||
-			fields[i] == "double_headed" || fields[i] == "reuse_sprites" || fields[i] == "layout" ||
-			fields[i] == "id"  || fields[i] == "template" {
+		if fields[i] == "cars" ||
+			fields[i] == "layout" ||
+			fields[i] == "id"  || fields[i] == "template"  || fields[i] == "ttd_len" {
 			requiredFields++
 		}
 
 	}
 
-	if requiredFields < 8 {
+	if requiredFields < 5 {
 		log.Printf("CSV headers: %v", fields)
-		err = fmt.Errorf("did not find template, id, cars, tender, reuse_sprites, requires_second_power_car, double_headed and layout columns in csv file")
+		err = fmt.Errorf("did not find template, id, cars, ttd_len, and layout columns in csv file")
 		return
 	}
 
