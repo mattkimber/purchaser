@@ -80,10 +80,11 @@ func processUnit(unit Unit) {
 	}
 
 	var outputImg *image.Paletted
+	offset := 0
 	curX := 2
 	ySize := 17
 
-	if len(sprites) <= 1 {
+	if unit.Cars <= 1 {
 		len := 0
 		splitArticLen := strings.Split(unit.ArticulatedLengths, ",")
 		for _, articLen := range splitArticLen {
@@ -93,6 +94,7 @@ func processUnit(unit Unit) {
 		}
 
 		curX = (MAX_SIZE / 2) - (len / 2)
+		offset = curX
 	}
 
 	for idx, sprite := range sprites {
@@ -130,8 +132,8 @@ func processUnit(unit Unit) {
 			}
 		}
 
-		if idx == 0 && curX > (2 + 1 + unit.Length) {
-			curX = 2 + 1 + unit.Length
+		if idx == 0 && curX > (2 + 1 + unit.Length + offset) {
+			curX = 2 + 1 + unit.Length + offset
 		}
 
 		if curX >= MAX_SIZE {
