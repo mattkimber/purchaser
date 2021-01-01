@@ -30,6 +30,7 @@ type Unit struct {
 	ReuseSpritesFrom string
 	Template string
 	Length int
+	ArticulatedLengths string
 }
 
 func Process(filename string) error{
@@ -81,6 +82,18 @@ func processUnit(unit Unit) {
 	var outputImg *image.Paletted
 	curX := 2
 	ySize := 17
+
+	if len(sprites) <= 1 {
+		len := 0
+		splitArticLen := strings.Split(unit.ArticulatedLengths, ",")
+		for _, articLen := range splitArticLen {
+			if l, err := strconv.Atoi(articLen); err == nil {
+				len += l * 4
+			}
+		}
+
+		curX = (MAX_SIZE / 2) - (len / 2)
+	}
 
 	for idx, sprite := range sprites {
 		spriteImg, err := getPNG(fmt.Sprintf("1x/%s_8bpp.png", sprite))
@@ -190,6 +203,11 @@ func getUnit(dataLine []string, fields []string) Unit {
 		sprites = []string { templateData["id"]}
 	}
 
+	articulatedLengths, _ := templateData["ttd_len"]
+	if aLengths, ok := templateData["articulated_lengths"]; ok && aLengths != "" {
+		articulatedLengths = aLengths
+	}
+
 	unit := Unit{
 		ID:                     templateData["id"],
 		Sprites:                sprites,
@@ -197,6 +215,7 @@ func getUnit(dataLine []string, fields []string) Unit {
 		DoubleHeaded:           false,
 		ReuseSpritesFrom:       templateData["reuse_sprites"],
 		Template:			    templateData["template"],
+		ArticulatedLengths:     articulatedLengths,
 	}
 
 	unit.Cars, _ = strconv.Atoi(templateData["cars"])
@@ -225,9 +244,9 @@ func getFields(data [][]string) (fields []string, err error) {
 	for i, f := range data[0] {
 		// CSVs found in the wild may have BOM in the header line
 		fields[i] = strings.Trim(f, " \xEF\xBB\xBF")
-		if fields[i] == "cars" ||
-			fields[i] == "layout" ||
-			fields[i] == "id"  || fields[i] == "template"  || fields[i] == "ttd_len" {
+
+		if fields[i] == "cars" || fields[i] == "layout" || fields[i] == "id" ||
+			fields[i] == "template"  || fields[i] == "ttd_len" {
 			requiredFields++
 		}
 
