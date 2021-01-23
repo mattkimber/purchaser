@@ -123,8 +123,10 @@ func processUnit(unit Unit) {
 
 		// Identify the newest input file
 		stats, err := os.Stat(filename)
-		if stats.ModTime().After(newestInput) {
-			newestInput = stats.ModTime()
+		if err == nil {
+			if stats.ModTime().After(newestInput) {
+				newestInput = stats.ModTime()
+			}
 		}
 
 		spriteImg, err := getPNG(filename)
