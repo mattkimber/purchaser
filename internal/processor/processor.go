@@ -11,6 +11,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const MAX_SIZE = 64
@@ -59,7 +60,27 @@ func Process(filename string) error{
 	return nil
 }
 
+func fileIsNewerThanDate(filename string, date time.Time) (bool, error) {
+	fileStats, err := os.Stat(filename)
+
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+
+	if err != nil {
+		return false, err
+	}
+
+	if fileStats.ModTime().After(date) {
+		return true, nil
+	}
+
+	return false, nil
+}
+
 func processUnit(unit Unit) {
+
+	var newestInput time.Time
 
 	if unit.Template == "na" || unit.Template == "tender" {
 		return
@@ -102,7 +123,17 @@ func processUnit(unit Unit) {
 	}
 
 	for idx, sprite := range sprites {
-		spriteImg, err := getPNG(fmt.Sprintf("1x/%s_8bpp.png", sprite))
+		filename := fmt.Sprintf("1x/%s_8bpp.png", sprite)
+
+		// Identify the newest input file
+		stats, err := os.Stat(filename)
+		if err == nil {
+			if stats.ModTime().After(newestInput) {
+				newestInput = stats.ModTime()
+			}
+		}
+
+		spriteImg, err := getPNG(filename)
 		if err != nil {
 			log.Printf("Error processing %s: %v", unit.ID, err)
 			return
@@ -166,20 +197,28 @@ func processUnit(unit Unit) {
 		}
 	}
 
-	err := writePNG(unit.ID, outputImg)
+	err := writePNG(unit.ID, outputImg, newestInput)
 	if err != nil {
 		log.Printf("could not write image for unit %s: %v", unit.ID, err)
 	}
 }
 
-func writePNG(id string, img image.PalettedImage) error {
-	file, err := os.Create(fmt.Sprintf("1x/%s_purchase.png", id))
+func writePNG(id string, img image.PalettedImage, newestInput time.Time) error {
+	filename := fmt.Sprintf("1x/%s_purchase.png", id)
+
+	newer, err := fileIsNewerThanDate(filename, newestInput)
+	if newer || err != nil {
+		return nil
+	}
+
+	file, err := os.Create(filename)
 	defer file.Close()
 	if err != nil {
 		return err
 	}
 
 	return png.Encode(file, img)
+
 }
 
 func getPNG(sprite string) (image.PalettedImage, error) {
