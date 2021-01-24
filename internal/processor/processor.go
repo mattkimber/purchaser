@@ -94,6 +94,10 @@ func processUnit(unit Unit) {
 		}
 
 		curX = (MAX_SIZE / 2) - (len / 2)
+		// If this breaks due to vehicle size, give up
+		if curX < 1 {
+			curX = 2
+		}
 		offset = curX
 	}
 
