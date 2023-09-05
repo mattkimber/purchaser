@@ -30,6 +30,7 @@ type Unit struct {
 	ReuseSpritesFrom       string
 	Template               string
 	Length                 int
+	OverrideLengthPerUnit  int
 	ArticulatedLengths     string
 }
 
@@ -87,7 +88,7 @@ func processUnit(unit Unit, scale int) {
 	}
 	overlay := ""
 
-	if unit.Cars > 0 {
+	if unit.Cars > 0 && unit.OverrideLengthPerUnit == 0 {
 		overlay = fmt.Sprintf("purchase_sprites/x%d.png", unit.Cars)
 	} else if unit.RequiresSecondPowerCar {
 		overlay = "purchase_sprites/second_power_car.png"
@@ -175,7 +176,9 @@ func processUnit(unit Unit, scale int) {
 
 			for y := 0; y < spriteImg.Bounds().Max.Y; y++ {
 				c := spriteImg.ColorIndexAt(x, y)
-				outputImg.SetColorIndex(curX, y, c)
+				if c != 0 {
+					outputImg.SetColorIndex(curX, y, c)
+				}
 				if c != 0 && c != 255 {
 					startDrawing = true
 				}
@@ -197,8 +200,10 @@ func processUnit(unit Unit, scale int) {
 			}
 		}
 
-		if idx == 0 && curX > ((1+unit.Length+offset)*scale) {
+		if idx == 0 && unit.OverrideLengthPerUnit == 0 && curX > ((1+unit.Length+offset)*scale) {
 			curX = 2 + ((1 + unit.Length + offset) * scale)
+		} else if unit.OverrideLengthPerUnit != 0 {
+			curX = (idx + 1) * unit.OverrideLengthPerUnit * scale
 		}
 
 		if curX >= MAX_SIZE*scale {
@@ -294,6 +299,7 @@ func getUnit(dataLine []string, fields []string) Unit {
 
 	unit.Cars, _ = strconv.Atoi(templateData["cars"])
 	unit.Length, _ = strconv.Atoi(templateData["ttd_len"])
+	unit.OverrideLengthPerUnit, _ = strconv.Atoi(templateData["purchase_length"])
 
 	// convert to pixels
 	unit.Length = unit.Length * 4
