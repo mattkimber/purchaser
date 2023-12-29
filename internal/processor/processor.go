@@ -88,7 +88,7 @@ func processUnit(unit Unit, scale int) {
 	}
 	overlay := ""
 
-	if unit.Cars > 0 && len(unit.OverrideLengthPerUnit) == 0 {
+	if unit.Cars > 0 && (len(unit.OverrideLengthPerUnit) == 0 || (len(unit.OverrideLengthPerUnit) == 1 && unit.OverrideLengthPerUnit[0] == 0)) {
 		overlay = fmt.Sprintf("purchase_sprites/x%d.png", unit.Cars)
 	} else if unit.RequiresSecondPowerCar {
 		overlay = "purchase_sprites/second_power_car.png"
